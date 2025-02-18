@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live AO Token Transactions</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #0d0d0d;
+            color: white;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        .timeline {
+            position: relative;
+            max-width: 600px;
+            margin: auto;
+            padding: 20px;
+            overflow-y: auto;
+            height: 80vh;
+        }
+        .timeline::after {
+            content: '';
+            position: absolute;
+            width: 3px;
+            background: white;
+            top: 0;
+            bottom: 0;
+            left: 10%;
+            margin-left: -1.5px;
+        }
+        .transaction {
+            position: relative;
+            background: #1a1a1a;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px auto;
+            width: 80%;
+            max-width: 350px;
+            box-shadow: 0 0 10px rgba(0, 255, 150, 0.3);
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            opacity: 0;
+            transform: translateX(-20px);
+            cursor: pointer;
+        }
+        .transaction.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        .transaction:hover {
+            background: #262626;
+            transform: scale(1.05);
+        }
+        .transaction::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: -25px;
+            width: 15px;
+            height: 15px;
+            background: white;
+            border-radius: 50%;
+            transform: translateY(-50%);
+        }
+        .transaction h3 {
+            margin: 5px 0;
+            font-size: 16px;
+            font-weight: bold;
+            color: #00e676;
+        }
+        .transaction p {
+            margin: 3px 0;
+            font-size: 14px;
+            color: #bbb;
+        }
+        .swap-label {
+            font-size: 14px;
+            font-weight: bold;
+            color: #ff9800;
+        }
+        .details {
+            display: none;
+            background: #333;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            color: #ddd;
+        }
+        .details p {
+            font-size: 12px;
+        }
+        .toggle-btn {
+            font-size: 12px;
+            color: #00e676;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Live AO Token Transactions</h2>
+    <div class="timeline" id="timeline"></div>
+
+    <script>
+        let seenTransactions = new Set();
+
+        async function fetchTransactions() {
+            const response = await fetch("/filtered-transactions");
+            const data = await response.json();
+            return data;
+        }
+
+        function getColor(type) {
+            const colors = {
+                "Swap": "#ff9800",
+                "Transfer": "#2196F3",
+                "Unknown": "#9E9E9E"
+            };
+            return colors[type] || colors["Unknown"];
+        }
+
+        function formatAmount(amount) {
+            return amount ? parseFloat(amount).toLocaleString() : "N/A";
+        }
+
+        async function updateTimeline() {
+            const { "Token Swaps": swaps, "Token Transfers": transfers } = await fetchTransactions();
+            const timeline = document.getElementById("timeline");
+
+            const allTransactions = [...swaps, ...transfers];
+
+            allTransactions.forEach((tx, index) => {
+                if (!seenTransactions.has(tx["Transaction ID"])) {
+                    seenTransactions.add(tx["Transaction ID"]);
+
+                    const txBlock = document.createElement("div");
+                    txBlock.className = "transaction";
+                    txBlock.style.borderLeft = `5px solid ${getColor(tx["Token Sent"] ? "Swap" : "Transfer")}`;
+
+                    txBlock.innerHTML = `
+                        <h3>Tx: ${tx["Transaction ID"].slice(0, 6)}...</h3>
+                        <p><strong>Sender:</strong> ${tx["Sender"].slice(0, 6)}...</p>
+                        ${tx["Recipient"] ? `<p><strong>Recipient:</strong> ${tx["Recipient"].slice(0, 6)}...</p>` : ""}
+                        ${tx["Token Sent"] ? `<p class="swap-label">${tx["Token Sent"]} → ${tx["Token Received"]}</p>` : ""}
+                        <p><strong>Amount:</strong> ${formatAmount(tx["Amount Sent"] || tx["Amount"])}</p>
+                        <p><strong>Type:</strong> ${tx["Token Sent"] ? "Swap" : "Transfer"}</p>
+                        <div class="toggle-btn" onclick="toggleDetails('${tx["Transaction ID"]}')">View More</div>
+                        <div class="details" id="details-${tx["Transaction ID"]}">
+                            <p><strong>Transaction ID:</strong> ${tx["Transaction ID"]}</p>
+                            <p><strong>Sender:</strong> ${tx["Sender"]}</p>
+                            ${tx["Recipient"] ? `<p><strong>Recipient:</strong> ${tx["Recipient"]}</p>` : ""}
+                            ${tx["Token Sent"] ? `<p><strong>Token Sent:</strong> ${tx["Token Sent"]}</p>` : ""}
+                            ${tx["Token Received"] ? `<p><strong>Token Received:</strong> ${tx["Token Received"]}</p>` : ""}
+                            ${tx["Executed Value"] ? `<p><strong>Executed Value:</strong> ${tx["Executed Value"]}</p>` : ""}
+                        </div>
+                    `;
+
+                    timeline.prepend(txBlock);
+
+                    setTimeout(() => {
+                        txBlock.classList.add("show");
+                    }, index * 100);
+                }
+            });
+        }
+
+        function toggleDetails(txId) {
+            const details = document.getElementById(`details-${txId}`);
+            if (details.style.display === "none" || details.style.display === "") {
+                details.style.display = "block";
+            } else {
+                details.style.display = "none";
+            }
+        }
+
+        updateTimeline();
+        setInterval(updateTimeline, 10000);
+    </script>
+</body>
+</html>
