@@ -5,7 +5,8 @@ def create_bubblemap(data):
     G = nx.DiGraph()
     
     for tx in data.get("data", {}).get("transactions", {}).get("edges", []):
-        sender = tx["node"].get("owner", {}).get("address", "Unknown Sender")
+        sender = tx["node"]["owner"]["address"] if "owner" in tx["node"] else "Unknown"
+        print(f"🔍 Extracted Sender for Tx {tx['node']['id']}: {sender}")
         recipient = tx["node"].get("recipient", "Unknown Recipient")
         G.add_edge(sender, recipient)
     

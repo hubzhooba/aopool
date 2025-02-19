@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live AO Token Transactions</title>
+    <title>Live AO Token Swaps</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body {
@@ -101,25 +101,21 @@
     </style>
 </head>
 <body>
-    <h2>Live AO Token Transactions</h2>
+    <h2>Live AO Token Swaps</h2>
     <div class="timeline" id="timeline"></div>
 
     <script>
         let seenTransactions = new Set();
 
         async function fetchTransactions() {
-            const response = await fetch("/filtered-transactions");
-            const data = await response.json();
-            return data;
-        }
-
-        function getColor(type) {
-            const colors = {
-                "Swap": "#ff9800",
-                "Transfer": "#2196F3",
-                "Unknown": "#9E9E9E"
-            };
-            return colors[type] || colors["Unknown"];
+            try {
+                const response = await fetch("/filtered-swaps"); 
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error("❌ Error fetching transactions:", error);
+                return { "Token Swaps": [] }; 
+            }
         }
 
         function formatAmount(amount) {
@@ -127,34 +123,59 @@
         }
 
         async function updateTimeline() {
-            const { "Token Swaps": swaps, "Token Transfers": transfers } = await fetchTransactions();
+            const data = await fetchTransactions();
+            if (!data) {
+                console.log("⚠️ No data received.");
+                return;
+            }
+
+            const swaps = data["Token Swaps"] || [];
             const timeline = document.getElementById("timeline");
 
-            const allTransactions = [...swaps, ...transfers];
+            if (swaps.length === 0) {
+                console.log("❌ No token swaps available.");
+                return;
+            }
 
-            allTransactions.forEach((tx, index) => {
-                if (!seenTransactions.has(tx["Transaction ID"])) {
-                    seenTransactions.add(tx["Transaction ID"]);
+            swaps.forEach((tx, index) => {
+                console.log("🔍 Processing Swap:", tx);
+
+                const txId = tx["Transaction ID"] || "Unknown";
+                const sender = tx["Sender"] || "Unknown";
+                const pool = tx["Pool"] || "Unknown";
+                const tokenSent = tx["Token Sent"] || "Unknown";
+                const tokenReceived = tx["Token Received"] || "Unknown";
+                const amountSent = tx["Amount Sent"] || "N/A";
+                const amountReceived = tx["Amount Received"] || "N/A";
+                const blockTime = tx["Block Timestamp"] || "N/A";
+                const blockHeight = tx["Block Height"] || "N/A";
+
+                if (!seenTransactions.has(txId)) {
+                    seenTransactions.add(txId);
 
                     const txBlock = document.createElement("div");
                     txBlock.className = "transaction";
-                    txBlock.style.borderLeft = `5px solid ${getColor(tx["Token Sent"] ? "Swap" : "Transfer")}`;
 
                     txBlock.innerHTML = `
-                        <h3>Tx: ${tx["Transaction ID"].slice(0, 6)}...</h3>
-                        <p><strong>Sender:</strong> ${tx["Sender"].slice(0, 6)}...</p>
-                        ${tx["Recipient"] ? `<p><strong>Recipient:</strong> ${tx["Recipient"].slice(0, 6)}...</p>` : ""}
-                        ${tx["Token Sent"] ? `<p class="swap-label">${tx["Token Sent"]} → ${tx["Token Received"]}</p>` : ""}
-                        <p><strong>Amount:</strong> ${formatAmount(tx["Amount Sent"] || tx["Amount"])}</p>
-                        <p><strong>Type:</strong> ${tx["Token Sent"] ? "Swap" : "Transfer"}</p>
-                        <div class="toggle-btn" onclick="toggleDetails('${tx["Transaction ID"]}')">View More</div>
-                        <div class="details" id="details-${tx["Transaction ID"]}">
-                            <p><strong>Transaction ID:</strong> ${tx["Transaction ID"]}</p>
-                            <p><strong>Sender:</strong> ${tx["Sender"]}</p>
-                            ${tx["Recipient"] ? `<p><strong>Recipient:</strong> ${tx["Recipient"]}</p>` : ""}
-                            ${tx["Token Sent"] ? `<p><strong>Token Sent:</strong> ${tx["Token Sent"]}</p>` : ""}
-                            ${tx["Token Received"] ? `<p><strong>Token Received:</strong> ${tx["Token Received"]}</p>` : ""}
-                            ${tx["Executed Value"] ? `<p><strong>Executed Value:</strong> ${tx["Executed Value"]}</p>` : ""}
+                        <h3>Tx: <a href="https://www.ao.link/#/message/${txId}" target="_blank" style="color: #00e676; text-decoration: none;">${txId.slice(0, 6)}...</a></h3>
+                        <p><strong>Sender:</strong> ${sender.slice(0, 6)}...</p>
+                        <p><strong>Pool:</strong> ${pool}</p>
+                        <p class="swap-label">${tokenSent} → ${tokenReceived}</p>
+                        <p><strong>Amount Sent:</strong> ${formatAmount(amountSent)}</p>
+                        <p><strong>Amount Received:</strong> ${formatAmount(amountReceived)}</p>
+                        <p><strong>Block Height:</strong> ${blockHeight}</p>
+                        <p><strong>Timestamp:</strong> ${blockTime}</p>
+                        <div class="toggle-btn" onclick="toggleDetails('${txId}')">View More</div>
+                        <div class="details" id="details-${txId}">
+                            <p><strong>Transaction ID:</strong> <a href="https://www.ao.link/#/message/${txId}" target="_blank" style="color: #00e676; text-decoration: none;">${txId}</a></p>
+                            <p><strong>Sender:</strong> ${sender}</p>
+                            <p><strong>Pool:</strong> ${pool}</p>
+                            <p><strong>Token Sent:</strong> ${tokenSent}</p>
+                            <p><strong>Token Received:</strong> ${tokenReceived}</p>
+                            <p><strong>Amount Sent:</strong> ${formatAmount(amountSent)}</p>
+                            <p><strong>Amount Received:</strong> ${formatAmount(amountReceived)}</p>
+                            <p><strong>Block Height:</strong> ${blockHeight}</p>
+                            <p><strong>Timestamp:</strong> ${blockTime}</p>
                         </div>
                     `;
 
@@ -169,11 +190,7 @@
 
         function toggleDetails(txId) {
             const details = document.getElementById(`details-${txId}`);
-            if (details.style.display === "none" || details.style.display === "") {
-                details.style.display = "block";
-            } else {
-                details.style.display = "none";
-            }
+            details.style.display = details.style.display === "block" ? "none" : "block";
         }
 
         updateTimeline();
